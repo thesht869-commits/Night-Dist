@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "Installing NightOS to your disk..."
+# Тут будет магия форматирования диска и копирования системы
+archinstall --config /etc/night-config.json
