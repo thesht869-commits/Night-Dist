@@ -4,25 +4,57 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
     steps:
-      - name: Checkout Night-Dist
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Build NightOS Engine (C++)
+      - name: Install System Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y meson ninja-build g++ libwayland-dev
-          cd Hyprland
-          # Здесь команды сборки, которые сделал Copilot
-          meson setup build
-          ninja -C build
-          # Копируем бинарник в папку образа
-          cp build/Hyprland ../archiso/airootfs/usr/bin/Hyprland
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel archiso cmake meson ninja git wayland wayland-protocols libinput libxkbcommon pixman pango hyprlang hyprutils hyprwayland-scanner hyprgraphics hyprcursor hyprlang cairo expat libdrm libdisplay-info libliftoff
+          
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Build ISO Image
-        uses: archlinux/archiso-action@v2
+      - name: Build NightOS Engine (Custom Hyprland)
+        run: |
+          cd Hyprland
+          # Исправляем права доступа для скриптов генерации шейдеров
+          chmod -R +x ./scripts
+          
+          # Создаем заглушку версии, так как мы удалили внутренний .git
+          echo "nightos-custom" > ./VERSION
+          
+          # Запускаем конфигурацию и сборку
+          cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B ./build
+          cmake --build ./build --config Release --target all -j$(nproc)
+          
+          # Копируем готовый бинарник в структуру будущего ISO
+          mkdir -p ../archiso/airootfs/usr/bin/
+          cp ./build/Hyprland ../archiso/airootfs/usr/bin/Hyprland
+
+      - name: Prepare NightOS Branding
+        run: |
+          mkdir -p archiso/airootfs/etc/
+          # Настраиваем имя системы в образе
+          echo 'NAME="NightOS"' > archiso/airootfs/etc/os-release
+          echo 'ID=nightos' >> archiso/airootfs/etc/os-release
+          echo 'PRETTY_NAME="NightOS (Night-Dist)"' >> archiso/airootfs/etc/os-release
+          
+          # Создаем базовый список пакетов для ISO, если он не был создан ранее
+          if [ ! -f archiso/packages.x86_64 ]; then
+            echo -e "base\nlinux\nlinux-firmware\nnetworkmanager\nkitty\nwaybar\nsddm" > archiso/packages.x86_64
+          fi
+
+      - name: Build ISO
+        run: |
+          # Копируем стандартный профиль ArchISO
+          cp -r /usr/share/archiso/configs/releng/* archiso/
+          # Запускаем сборку образа
+          mkarchiso -v -w /tmp/archiso-tmp/ -o ./output/ ./archiso/
+
+      - name: Upload NightOS ISO
+        uses: actions/upload-artifact@v4
         with:
-          iso_name: NightOS
-          working_directory: archiso
+          name: NightOS-Live-Image
+          path: ./output/*.iso
