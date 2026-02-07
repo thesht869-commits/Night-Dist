@@ -1,0 +1,28 @@
+name: Build NightOS ISO
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Night-Dist
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build NightOS Engine (C++)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build g++ libwayland-dev
+          cd Hyprland
+          # Здесь команды сборки, которые сделал Copilot
+          meson setup build
+          ninja -C build
+          # Копируем бинарник в папку образа
+          cp build/Hyprland ../archiso/airootfs/usr/bin/Hyprland
+
+      - name: Build ISO Image
+        uses: archlinux/archiso-action@v2
+        with:
+          iso_name: NightOS
+          working_directory: archiso

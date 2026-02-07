@@ -1,0 +1,86 @@
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include "Plugin.hpp"
+
+enum eHeadersErrors {
+    HEADERS_OK = 0,
+    HEADERS_NOT_HYPRLAND,
+    HEADERS_MISSING,
+    HEADERS_CORRUPTED,
+    HEADERS_MISMATCHED,
+    HEADERS_ABI_MISMATCH,
+    HEADERS_DUPLICATED
+};
+
+enum eNotifyIcons {
+    ICON_WARNING = 0,
+    ICON_INFO,
+    ICON_HINT,
+    ICON_ERROR,
+    ICON_CONFUSED,
+    ICON_OK,
+    ICON_NONE
+};
+
+enum ePluginLoadStateReturn {
+    LOADSTATE_OK = 0,
+    LOADSTATE_FAIL,
+    LOADSTATE_PARTIAL_FAIL,
+    LOADSTATE_HEADERS_OUTDATED,
+    LOADSTATE_HYPRLAND_UPDATED
+};
+
+struct SHyprlandVersion {
+    std::string branch;
+    std::string hash;
+    std::string date;
+    std::string abiHash;
+    int         commits = 0;
+};
+
+class CPluginManager {
+  public:
+    CPluginManager();
+
+    bool                   addNewPluginRepo(const std::string& url, const std::string& rev);
+    bool                   removePluginRepo(const SPluginRepoIdentifier identifier);
+
+    eHeadersErrors         headersValid();
+    bool                   updateHeaders(bool force = false);
+    bool                   updatePlugins(bool forceUpdateAll);
+
+    void                   listAllPlugins();
+
+    bool                   enablePlugin(const SPluginRepoIdentifier identifier);
+    bool                   disablePlugin(const SPluginRepoIdentifier identifier);
+    ePluginLoadStateReturn ensurePluginsLoadState(bool forceReload = false);
+
+    bool                   loadUnloadPlugin(const std::string& path, bool load);
+    SHyprlandVersion       getHyprlandVersion(bool running = true);
+
+    void                   notify(const eNotifyIcons icon, uint32_t color, int durationMs, const std::string& message);
+
+    const std::string&     getPkgConfigPath();
+
+    bool                   hasDeps();
+
+    bool                   m_bVerbose   = false;
+    bool                   m_bNoShallow = false;
+    std::string            m_szCustomHlUrl, m_szUsername;
+
+    // will delete recursively if exists!!
+    bool createSafeDirectory(const std::string& path);
+
+  private:
+    std::string headerError(const eHeadersErrors err);
+    std::string headerErrorShort(const eHeadersErrors err);
+
+    std::string m_szWorkingPluginDirectory;
+};
+
+inline std::unique_ptr<CPluginManager> g_pPluginManager;

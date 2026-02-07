@@ -1,0 +1,44 @@
+name: Nix (Update Inputs)
+
+on:
+  workflow_call:
+    secrets:
+      PAT:
+        required: true
+
+jobs:
+  update:
+    if: github.repository == 'hyprwm/Hyprland'
+    name: inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT }}
+
+      - name: Install Nix
+        uses: nixbuild/nix-quick-install-action@v31
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v6
+        with:
+          # restore and save a cache using this key (per job)
+          primary-key: nix-${{ runner.os }}-${{ github.job }}
+          # if there's no cache hit, restore a cache by this prefix
+          restore-prefixes-first-match: nix-${{ runner.os }}
+          # collect garbage until the Nix store size (in bytes) is at most this number
+          # before trying to save a new cache
+          gc-max-store-size-linux: 5G
+
+      - name: Update inputs
+        run: nix/update-inputs.sh
+
+      - name: Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "[gha] Nix: update inputs"
