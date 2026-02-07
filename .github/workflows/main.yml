@@ -1,0 +1,53 @@
+name: Build NightOS ISO
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Используем контейнер с Arch Linux, так как только в нем есть инструменты mkarchiso
+    container:
+      image: archlinux:latest
+      options: --privileged
+    steps:
+      - name: Install System Dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel archiso cmake meson ninja git wayland wayland-protocols libinput libxkbcommon pixman pango hyprlang hyprutils hyprwayland-scanner hyprgraphics
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Build NightOS Engine (Custom Hyprland)
+        run: |
+          cd Hyprland
+          # Компилируем твой измененный OpenGL.cpp
+          cmake --no-warn-unused-cli -DCMAKE_BUILD_TYPE:STRING=Release -S . -B ./build
+          cmake --build ./build --config Release --target all -j$(nproc)
+          # Подготавливаем папку для образа
+          mkdir -p ../archiso/airootfs/usr/bin/
+          cp ./build/Hyprland ../archiso/airootfs/usr/bin/Hyprland
+
+      - name: Prepare NightOS Branding
+        run: |
+          mkdir -p archiso/airootfs/etc/
+          echo 'NAME="NightOS"' > archiso/airootfs/etc/os-release
+          echo 'ID=nightos' >> archiso/airootfs/etc/os-release
+          echo 'PRETTY_NAME="NightOS (Night-Dist)"' >> archiso/airootfs/etc/os-release
+          
+          # Проверяем наличие списка пакетов
+          if [ ! -f archiso/packages.x86_64 ]; then
+            echo -e "base\nlinux\nlinux-firmware\nnetworkmanager\nkitty" > archiso/packages.x86_64
+          fi
+
+      - name: Build ISO
+        run: |
+          # Копируем стандартный профиль archiso как основу
+          cp -r /usr/share/archiso/configs/releng/* archiso/
+          # Собираем итоговый образ
+          mkarchiso -v -w /tmp/archiso-tmp/ -o ./output/ ./archiso/
+
+      - name: Upload NightOS ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NightOS-Live-Image
+          path: ./output/*.iso
